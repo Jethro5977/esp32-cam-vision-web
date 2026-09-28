@@ -1,0 +1,40 @@
+{
+  "captured_at": "2026-09-29T02:23:52+08:00",
+  "test_scope": "15 次本机历史成功记录；电脑接口与网页按钮流程；未验证 iPhone Safari",
+  "stats": {
+    "sample_count": 15,
+    "attempt_count": 15,
+    "failure_count": 0,
+    "invalid_lines": 0,
+    "timings_ms": {
+      "capture_ms": {
+        "mean": 256.63,
+        "median": 263.68,
+        "p95": 335.73
+      },
+      "api_ms": {
+        "mean": 2228.39,
+        "median": 1855.06,
+        "p95": 4378.65
+      },
+      "total_ms": {
+        "mean": 2490.65,
+        "median": 2200.43,
+        "p95": 4645.6
+      }
+    },
+    "average_image_bytes": 6009.33,
+    "average_usage": {
+      "prompt_tokens": 233.93,
+      "completion_tokens": 244.93,
+      "total_tokens": 478.87
+    },
+    "usage_sample_count": {
+      "prompt_tokens": 15,
+      "completion_tokens": 15,
+      "total_tokens": 15
+    },
+    "percentile_method": "nearest-rank",
+    "scope": "全部本地历史中的成功记录"
+  }
+}
