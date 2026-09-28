@@ -1,6 +1,124 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="color-scheme" content="light dark"><title>ESP32-CAM · 视觉工作台</title><link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script></head>
-<body><main><header><p class="eyebrow">ESP32-CAM / VISION WEB</p><h1>看见，再理解。</h1><p class="sub">相机负责拍摄，电脑连接云端 AI。</p><div id="health" role="status">正在探测摄像头…</div><button id="refresh" class="quiet">刷新连接状态</button></header>
-<section aria-labelledby="prompt-title"><h2 id="prompt-title">你想了解什么？</h2><div class="presets"><button type="button" data-prompt="描述这张图" aria-pressed="true">描述这张图</button><button type="button" data-prompt="数一数画面里的物品" aria-pressed="false">数一数物品</button><button type="button" data-prompt="读出画面中的文字" aria-pressed="false">读出文字</button><button type="button" data-prompt="判断环境是否整洁" aria-pressed="false">检查整洁度</button></div><label for="prompt">提示词 · 可直接修改</label><textarea id="prompt" maxlength="2000" rows="3">描述这张图</textarea><button id="analyze" class="primary">拍照并识别</button><p class="note">点击后拍摄 ESP32-CAM 面前的场景，并将这张照片发送给 DeepSeek。图片与结果保存在电脑；同一局域网的访问者可查看。</p><p id="progress" role="status" aria-live="polite"></p><p id="error" role="alert" hidden></p></section>
-<section id="latest-section" hidden><h2>本次结果</h2><div id="latest"></div></section><section><div class="section-head"><h2>最近记录</h2><span>最多 20 条</span></div><p id="history-warning" class="note"></p><div id="history">正在读取历史…</div></section><footer>ESP32 不运行模型 · 电脑是网关<br><a href="/api/stats" target="_blank" rel="noopener">查看实测性能统计 JSON ↗</a></footer></main>
-<dialog id="lightbox" aria-label="照片大图"><button id="close-lightbox" autofocus>关闭大图</button><img id="large-image" alt="本次拍摄的大图"></dialog></body></html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#F2F2F7">
+  <title>AI Vision · ESP32-CAM</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">AI Vision</span>
+      <div id="camera-status" class="camera-status" data-state="checking" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="status-text">检测中</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="card preview-card" aria-labelledby="preview-title">
+      <button id="preview-expand" class="preview-expand" type="button" aria-controls="preview-content" aria-expanded="false">
+        <span class="preview-title-group">
+          <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2.5" y="5.5" width="19" height="13" rx="3"></rect>
+            <circle cx="12" cy="12" r="3.2"></circle>
+          </svg>
+          <span id="preview-title">查看实时画面</span>
+        </span>
+        <svg class="chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="m5 7.5 5 5 5-5"></path>
+        </svg>
+      </button>
+      <div id="preview-content" class="preview-content" hidden>
+        <div class="preview-meta">
+          <span id="camera-address" class="camera-address">正在读取相机地址</span>
+          <label class="stream-control" for="stream-switch">
+            <span>显示画面</span>
+            <input id="stream-switch" type="checkbox" role="switch" aria-label="显示实时画面">
+            <span class="switch-track" aria-hidden="true"></span>
+          </label>
+        </div>
+        <div class="stream-frame">
+          <img id="live-stream" alt="ESP32-CAM 实时画面" hidden>
+          <span id="stream-placeholder">打开开关后显示相机画面</span>
+        </div>
+        <p class="preview-hint">收起或切换页面时会断开视频流。</p>
+      </div>
+    </section>
+
+    <section class="card capture-card" aria-labelledby="capture-title">
+      <div class="section-heading">
+        <h1 id="capture-title">拍照识别</h1>
+        <p>镜头看到什么，AI 就描述什么</p>
+      </div>
+
+      <div class="prompt-tabs" role="group" aria-label="选择识别方式">
+        <button class="prompt-pill" type="button" data-prompt="描述这张图" aria-pressed="true">描述画面</button>
+        <button class="prompt-pill" type="button" data-prompt="数一数画面里的物品" aria-pressed="false">数物品</button>
+        <button class="prompt-pill" type="button" data-prompt="读出画面中的文字" aria-pressed="false">读文字</button>
+        <button class="prompt-pill" type="button" data-prompt="判断环境是否整洁" aria-pressed="false">判断整洁度</button>
+        <button id="custom-pill" class="prompt-pill" type="button" aria-pressed="false" aria-controls="custom-field">自定义</button>
+      </div>
+
+      <div id="custom-field" class="custom-field" hidden>
+        <label for="custom-prompt">自定义提示词</label>
+        <div class="custom-input-wrap">
+          <textarea id="custom-prompt" rows="3" maxlength="2000" placeholder="例如：这张照片里有哪些电子元件？"></textarea>
+          <button id="clear-prompt" class="clear-prompt" type="button" aria-label="清除自定义提示词">清除</button>
+        </div>
+      </div>
+
+      <div class="shutter-area">
+        <button id="shutter-button" class="shutter-button" type="button" aria-label="拍照并识别" aria-describedby="capture-caption">
+          <span class="shutter-core" aria-hidden="true"></span>
+          <span class="shutter-spinner" aria-hidden="true"></span>
+        </button>
+        <p id="capture-caption">点击拍照并识别</p>
+      </div>
+      <p class="privacy-note">照片由电脑发送至 DeepSeek 识别，并保存在本机。</p>
+    </section>
+
+    <section class="results-section" aria-labelledby="result-title">
+      <h2 id="result-title">识别结果</h2>
+      <div id="result-root" aria-live="polite">
+        <div class="empty-card">
+          <svg class="empty-camera" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+            <rect x="15" y="27" width="66" height="47" rx="12" stroke="currentColor" stroke-width="3"></rect>
+            <path d="M32 27l5-8h22l5 8" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+            <circle cx="48" cy="50.5" r="13" stroke="currentColor" stroke-width="3"></circle>
+            <circle cx="48" cy="50.5" r="4" fill="currentColor"></circle>
+          </svg>
+          <strong>拍一张试试</strong>
+          <span>你的第一条识别结果会显示在这里</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card history-card" aria-labelledby="history-title">
+      <div class="history-heading">
+        <h2 id="history-title">识别历史</h2>
+        <span id="history-count">共 0 条</span>
+      </div>
+      <p id="history-warning" class="history-warning" hidden></p>
+      <div id="history-list" class="history-list"><p class="history-empty">正在读取历史记录…</p></div>
+      <p id="history-more" class="history-more" hidden>更早记录已归档，仍保存在电脑历史文件中</p>
+    </section>
+
+    <footer class="app-footer">
+      <p>ESP32-CAM × DeepSeek Flash · 端云协同视觉识别</p>
+      <p>电脑网关 · 非板上推理 · 局域网使用</p>
+      <a href="/api/stats" target="_blank" rel="noopener">查看实测性能数据</a>
+    </footer>
+  </main>
+
+  <dialog id="photo-dialog" class="photo-dialog" aria-label="查看完整照片">
+    <button id="photo-close" class="photo-close" type="button" aria-label="关闭照片">×</button>
+    <img id="photo-full" alt="ESP32-CAM 拍摄的完整照片">
+  </dialog>
+</body>
+</html>
