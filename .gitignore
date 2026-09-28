@@ -1,0 +1,8 @@
+.secrets/
+captures/
+*.jsonl
+__pycache__/
+.venv/
+config.json
+.env
+.DS_Store
