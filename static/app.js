@@ -6,7 +6,6 @@ const ui = {
   previewExpand: document.querySelector("#preview-expand"),
   previewContent: document.querySelector("#preview-content"),
   cameraAddress: document.querySelector("#camera-address"),
-  streamSwitch: document.querySelector("#stream-switch"),
   stream: document.querySelector("#live-stream"),
   streamPlaceholder: document.querySelector("#stream-placeholder"),
   pills: Array.from(document.querySelectorAll(".prompt-pill")),
@@ -15,7 +14,6 @@ const ui = {
   customPrompt: document.querySelector("#custom-prompt"),
   clearPrompt: document.querySelector("#clear-prompt"),
   shutter: document.querySelector("#shutter-button"),
-  caption: document.querySelector("#capture-caption"),
   resultRoot: document.querySelector("#result-root"),
   historyList: document.querySelector("#history-list"),
   historyCount: document.querySelector("#history-count"),
@@ -72,11 +70,11 @@ async function refreshHealth() {
     state.cameraUrl = typeof data.camera_url === "string" ? data.camera_url : "";
     ui.cameraAddress.textContent = state.cameraUrl || "相机地址未配置";
     setCameraStatus(data.camera_online ? "online" : "offline", data.camera_online ? "在线" : "离线");
-    if (!data.camera_online && ui.streamSwitch.checked) stopStream("摄像头已离线，请检查供电与网络。");
+    if (!data.camera_online && !ui.previewContent.hidden) stopStream("摄像头已离线，请检查供电与网络。");
   } catch {
     setCameraStatus("offline", "离线");
     ui.cameraAddress.textContent = "电脑服务暂时不可达";
-    if (ui.streamSwitch.checked) stopStream("无法连接电脑服务，请检查局域网。");
+    if (!ui.previewContent.hidden) stopStream("无法连接电脑服务，请检查局域网。");
   }
 }
 
@@ -85,9 +83,8 @@ function stopStream(message) {
   ui.stream.onload = null;
   ui.stream.removeAttribute("src");
   ui.stream.hidden = true;
-  ui.streamSwitch.checked = false;
   ui.streamPlaceholder.hidden = false;
-  ui.streamPlaceholder.textContent = message || "打开开关后显示相机画面";
+  ui.streamPlaceholder.textContent = message || "展开后自动连接相机画面";
   state.streamFallbackTried = false;
 }
 
@@ -129,7 +126,8 @@ function togglePreview() {
   const opening = ui.previewContent.hidden;
   ui.previewContent.hidden = !opening;
   ui.previewExpand.setAttribute("aria-expanded", String(opening));
-  if (!opening) stopStream();
+  if (opening) startStream();
+  else stopStream();
 }
 
 function selectPill(pill) {
@@ -231,8 +229,8 @@ function resultCard(record, animate) {
   const bytes = typeof record.image_bytes === "number" ?
     displayNumber(record.image_bytes / 1024, 2) + " KB" : "—";
   const extra = "图片 " + bytes +
-    " · Base64 " + displayNumber(record.base64_length, 0) + "字符" +
-    " · Token " + displayNumber((record.usage || {}).total_tokens, 0);
+    " · Base64 " + displayNumber(record.base64_length, 0) + " 字符 · Token " +
+    displayNumber((record.usage || {}).total_tokens, 0);
   strip.append(make("p", "performance-extra", extra));
   card.append(strip);
 
@@ -349,7 +347,7 @@ function setBusy(busy) {
   ui.shutter.disabled = busy;
   ui.shutter.classList.toggle("is-loading", busy);
   ui.shutter.setAttribute("aria-busy", String(busy));
-  ui.caption.textContent = busy ? "正在识别，请稍候…" : "点击拍照并识别";
+  ui.shutter.setAttribute("aria-label", busy ? "识别中" : "拍照并识别");
 }
 
 async function analyze() {
@@ -384,10 +382,6 @@ async function analyze() {
 }
 
 ui.previewExpand.addEventListener("click", togglePreview);
-ui.streamSwitch.addEventListener("change", function () {
-  if (ui.streamSwitch.checked) startStream();
-  else stopStream();
-});
 ui.pills.forEach(function (pill) {
   pill.addEventListener("click", function () { selectPill(pill); });
 });
@@ -405,7 +399,7 @@ ui.dialog.addEventListener("close", function () {
   ui.dialogImage.removeAttribute("src");
 });
 document.addEventListener("visibilitychange", function () {
-  if (document.hidden && ui.streamSwitch.checked) stopStream("视频流已暂停，打开开关可继续预览。");
+  if (document.hidden && !ui.previewContent.hidden) stopStream("视频流已暂停，收起后重新展开可继续预览。");
   if (!document.hidden) refreshHealth();
 });
 window.setInterval(refreshHealth, 10000);

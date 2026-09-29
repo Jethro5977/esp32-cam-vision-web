@@ -2,6 +2,8 @@
 
 一个运行在电脑上的局域网视觉网关：手机打开网页，触发 ESP32-CAM 拍照，并查看 DeepSeek Flash 的云端识别结果。
 
+**当前版本：v0.2.0。** 本版加入已在 AI Thinker ESP32-CAM 上烧录的 WiFiManager 固件和移动端控制台细节调整；版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+
 **ESP32 不运行模型，电脑是网关。** 这不是板上 AI 推理，也不是手机摄像头应用。拍到的是 ESP32-CAM 镜头前的场景。
 
 ```mermaid
@@ -14,15 +16,29 @@ flowchart TD
     E -->|识别文本 + token 用量| B
     B --> F[history.jsonl / 本地历史]
     B -->|照片 + 结果 + 性能数据| A
+    A -->|展开实时预览：GET /stream| C
 ```
 
 ## 前置条件
 
-- AI Thinker ESP32-CAM（OV2640），已烧录 Espressif 官方 CameraWebServer。
+- AI Thinker ESP32-CAM（OV2640），已烧录本仓库的 WiFiManager 固件，或仍使用 Espressif 官方 CameraWebServer。
 - 电脑能打开相机首页，相机 `/capture` 能返回 JPEG；ESP32 使用支持的 2.4 GHz Wi-Fi。
 - 手机、电脑和相机位于可互访的局域网。手机不必使用同一频段，但路由器不能启用客户端隔离。
 - Python 3.10+；电脑可连接互联网；有效且有余额的 DeepSeek API Key。
 - 当前接口按 DeepSeek `deepseek-flash` 图片输入协议实现。账号可用性、模型能力和费用由服务提供商决定。
+
+## 可选：烧录带配网功能的相机固件
+
+本仓库提供 [`firmware/ESP32CAM_WiFiManager/ESP32CAM_WiFiManager.ino`](firmware/ESP32CAM_WiFiManager/ESP32CAM_WiFiManager.ino)。已能稳定运行官方 CameraWebServer 的设备可以继续使用原固件。新固件保留 `/capture`，并增加 `/status`、可折叠的实时预览所需 `/stream`；电脑后端无需改动。
+
+1. 在 Arduino IDE 安装 **tzapu 的 WiFiManager 2.x**（本次烧录使用 2.0.17），选择 **AI Thinker ESP32-CAM** 板型和对应串口。本次使用的 ESP32 Arduino core 为 3.3.12。
+2. 打开仓库中的 `.ino`。如底座需要手动进入下载模式，按住 **IO0**，短按并松开 **RST**，再松开 IO0；点击 Upload。烧录完成后，只短按 RST 正常启动。串口监视器设为 115200。
+3. 首次启动或旧 Wi-Fi 不可达时，相机尝试连接约 15 秒后开启无密码热点 **AI-Vision-Setup**。连接该热点，访问 `http://192.168.4.1`，选择 **2.4 GHz、个人密码制** Wi-Fi 并保存。配网页面等待约 10 分钟；超时后设备重启重试。串口监视器会打印连接后的新 IP。
+4. 将新 IP 写入本机 `config.json` 的 `camera_url`，例如 `http://<相机IP>`。手机、电脑和相机需要能互相访问；使用手机热点时，让电脑和相机连接该热点。相机 IP 变化后更新本机配置。
+
+相机提供 `GET /capture`（JPEG）、`GET /status`（JSON）和 `GET /stream`。`/stream` 会重定向至相机的 **81 端口**，视频流独立于 80 端口的拍照服务。校园网等需要账号登录或 WPA2-Enterprise 的网络不适用于这套密码式配网流程。
+
+**切换 Wi-Fi：**关闭或离开上一次连接的网络，短按 RST；连接失败后重新进入 AI-Vision-Setup 配网。运行时**不要长按 IO0 清除配置**：ESP32-CAM 的 IO0 同时是摄像头时钟引脚，本版没有实现 IO0 长按重置。IO0 仅在需要进入下载模式烧录时使用。
 
 ## 安装
 
@@ -85,7 +101,7 @@ python -m uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1
 4. 展开历史查看最近 20 条；刷新页面会从电脑 JSONL 恢复。
 5. 访问 `/api/stats` 获取全部历史的实测统计。
 
-识别时电脑必须保持运行且联网。相机通常无需一直插电脑，稳定供电并接入同一局域网即可。网页不是持续视频分析；每次点击只发送一张照片。实时视频仍在相机自己的首页观看。
+识别时电脑必须保持运行且联网。相机通常无需一直插电脑，稳定供电并接入同一局域网即可。网页不是持续视频分析；每次点击只发送一张照片。页面上的“查看实时画面”会让手机浏览器直接连接相机 `/stream`；收起时断开视频流。预览要求手机也能访问相机地址和 81 端口；拍照识别则由电脑访问相机。
 
 ## 局域网访问与隐私
 
@@ -123,11 +139,11 @@ python -m uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1
 - 无样本时统计值为 `null`，不预填性能成绩。统计覆盖全部本地历史，网页仅显示最近 20 条。
 - 损坏的 JSONL 行会跳过，`invalid_lines` 和网页警告会明确显示。
 
-## 本机实测（2026-09-29）
+## 改版前的本机实测基线（2026-09-29）
 
 15 次识别成功，失败 0 次。平均总耗时 **2,491 ms**，P95 **4,646 ms**，平均图片大小 **5.87 KB**，平均总用量 **478.9 tokens**（输入 233.9、输出 244.9）。测试经过电脑端接口和网页识别流程；iPhone Safari 尚未单独验证。
 
-这是单台设备、单个局域网和小样本的现场测量，不能代表其他网络、相机或账户性能。P95 使用最近秩法。数据快照：[汇总图片](benchmarks/2026-09-29-api-stats.png) · [原始统计 JSON](benchmarks/2026-09-29-api-stats.json)。只发布聚合数据，不发布相机照片、逐条历史、提示词或密钥。
+这组数据来自 **v0.2.0 WiFiManager 固件及本次界面调整之前** 的单台设备、单个局域网和小样本现场测量，不代表新固件或其他网络、相机、账户的性能。P95 使用最近秩法。数据快照：[汇总图片](benchmarks/2026-09-29-api-stats.png) · [原始统计 JSON](benchmarks/2026-09-29-api-stats.json)。只发布聚合数据，不发布相机照片、逐条历史、提示词或密钥。
 
 ## 常见问题
 
@@ -145,6 +161,8 @@ python -m uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1
 | 照片保存了但识别失败 | 历史会保存失败原因和已有照片，后续阶段字段为 null |
 | 识别文字不准确 | 改善光线、拍摄距离和提示词；模型输出不是事实保证 |
 | 相机显示在线但不能拍照 | 首页可达不代表 `/capture` 正常，查看拍照时的具体错误 |
+| 手机能拍照但预览黑屏 | 检查手机能否直接访问相机 `/stream` 和 81 端口，以及热点是否隔离客户端 |
+| 更换热点后相机连不上 | 关闭旧热点，短按 RST，等待 AI-Vision-Setup 出现后重新配网；更新本机 `camera_url` |
 
 ## 文件结构
 
@@ -160,6 +178,8 @@ static/app.js         原生浏览器交互
 static/style.css      移动端与明暗主题
 config.example.json   无私人信息的配置模板
 requirements.txt      三个直接依赖
+firmware/ESP32CAM_WiFiManager/ESP32CAM_WiFiManager.ino  可选相机固件
+CHANGELOG.md          版本变更记录
 ```
 
 ## 当前未实现

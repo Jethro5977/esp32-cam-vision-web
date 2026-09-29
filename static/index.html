@@ -37,15 +37,10 @@
       <div id="preview-content" class="preview-content" hidden>
         <div class="preview-meta">
           <span id="camera-address" class="camera-address">正在读取相机地址</span>
-          <label class="stream-control" for="stream-switch">
-            <span>显示画面</span>
-            <input id="stream-switch" type="checkbox" role="switch" aria-label="显示实时画面">
-            <span class="switch-track" aria-hidden="true"></span>
-          </label>
         </div>
         <div class="stream-frame">
           <img id="live-stream" alt="ESP32-CAM 实时画面" hidden>
-          <span id="stream-placeholder">打开开关后显示相机画面</span>
+          <span id="stream-placeholder">展开后自动连接相机画面</span>
         </div>
         <p class="preview-hint">收起或切换页面时会断开视频流。</p>
       </div>
@@ -73,14 +68,14 @@
         </div>
       </div>
 
-      <div class="shutter-area">
-        <button id="shutter-button" class="shutter-button" type="button" aria-label="拍照并识别" aria-describedby="capture-caption">
-          <span class="shutter-core" aria-hidden="true"></span>
-          <span class="shutter-spinner" aria-hidden="true"></span>
-        </button>
-        <p id="capture-caption">点击拍照并识别</p>
-      </div>
       <p class="privacy-note">照片由电脑发送至 DeepSeek 识别，并保存在本机。</p>
+
+      <div class="shutter-area">
+        <button id="shutter-button" class="shutter-button" type="button" aria-label="拍照并识别" aria-busy="false">
+          <span class="shutter-core" aria-hidden="true"></span>
+          <span class="shutter-loading-label" aria-hidden="true">识别中...</span>
+        </button>
+      </div>
     </section>
 
     <section class="results-section" aria-labelledby="result-title">
